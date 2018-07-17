@@ -1,3 +1,5 @@
+import com.google.gson.Gson;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
@@ -13,6 +15,8 @@ import java.net.URL;
 public class DailyFortuneApp {
 
     public static final String API_URL = "https://talaikis.com/api/quotes/random/";
+
+    JFrame gettingResultFrame;
 
     public DailyFortuneApp() {
         JFrame f=new JFrame("Button Example");
@@ -39,36 +43,95 @@ public class DailyFortuneApp {
         f.setVisible(true);
         f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
+
+
         //action listener
         b.addActionListener(new ActionListener() {
 
             @Override
             public void actionPerformed(ActionEvent arg0) {
-                label1.setText("Name has been submitted.");
 
+                label1.setText("Get your quote now !");
+                String name = textfield.getText();
                 try {
-                    getFortune();
+                    getFortune(name);
                 } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                try {
+                    showGettingResultWindow(name);
+                } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
             }
         });
     }
 
-    private void getFortune() throws IOException {
-        //1. call api
-        String response = callApi(API_URL);
-        System.out.println(response);
-        //2. parse the response => get the fortune string
-        String quote = parseResponse(response);
-        //3. show it in a dialog
+    private void showGettingResultWindow(String name) throws InterruptedException {
+//        JOptionPane.showMessageDialog(null, "Getting the result...");
+        int time = 0;
+        JLabel label = new JLabel("Getting the result...: " + time);
+        gettingResultFrame = new JFrame();
+        gettingResultFrame.add(label);
+        gettingResultFrame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+        gettingResultFrame.setSize(250, 200);
+        gettingResultFrame.setLocationRelativeTo(null);
+        gettingResultFrame.setLayout(new GridBagLayout());
+        gettingResultFrame.setVisible(true);
+
+        new Thread() {
+            int counter = 10;
+            public void run() {
+                while(counter >= 0) {
+                    label.setText(String.format("%s, please wait...%d", name, (counter--)));
+                    label.getParent().validate();
+                    try{
+                        Thread.sleep(1000);
+                    } catch(Exception e) {}
+                }
+            }
+        }.start();
     }
 
-    private String parseResponse(String response) {
+    private void getFortune(String name) throws IOException {
+        //1. call api
+        final String[] response = new String[1];
+        Thread thread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    response[0] = callApi(API_URL);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                SwingUtilities.invokeLater(new Runnable() {
+                    @Override
+                    public void run() {
+                        System.out.println(response[0]);
+                        //2. parse the response => get the fortune string
+                        String quote = parseResponseAndGetQuote(response[0]);
+                        System.out.println(quote);
+                        //3. show it in a dialog
+                        showQuoteDialog(name, quote);
+                    }
+                });
+            }
+        });
+        thread.start();
+    }
 
+    private void showQuoteDialog(String name, String quote) {
+        gettingResultFrame.dispose();
+        JOptionPane.showMessageDialog(null, String.format("Hi %s, your quote today is:%n%s", name, quote));
+    }
+
+    private String parseResponseAndGetQuote(String response) {
+        Quote quote = new Gson().fromJson(response, Quote.class);
+        return quote.getQuote();
     }
 
     private String callApi(String apiUrl) throws IOException {
+
         StringBuilder result = new StringBuilder();
         URL url = new URL(apiUrl);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
